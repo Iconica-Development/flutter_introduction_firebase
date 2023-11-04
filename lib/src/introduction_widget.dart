@@ -16,7 +16,8 @@ class IntroductionFirebase extends StatefulWidget {
   const IntroductionFirebase({
     required this.options,
     required this.onComplete,
-    required this.examplePage,
+    this.decoration,
+    this.layoutStyle,
     this.titleBuilder,
     this.contentBuilder,
     this.imageBuilder,
@@ -25,6 +26,7 @@ class IntroductionFirebase extends StatefulWidget {
     this.introductionService,
     this.physics,
     this.child,
+    this.languageCodeOverride,
     super.key,
   });
 
@@ -49,8 +51,12 @@ class IntroductionFirebase extends StatefulWidget {
   /// The widget to show when the introduction screen is loading
   final Widget? child;
 
-  /// Option to customize all the pages in the introduction screen
-  final IntroductionPage examplePage;
+  /// The decoration of an introduction page if it doesn't have
+  ///  a backgroundImage or backgroundColor
+  final BoxDecoration? decoration;
+
+  /// The layout style of all the introduction pages
+  final IntroductionLayoutStyle? layoutStyle;
 
   /// The builder used to build the title of the introduction page
   final Widget Function(String)? titleBuilder;
@@ -60,6 +66,10 @@ class IntroductionFirebase extends StatefulWidget {
 
   /// The builder used to build the image of the introduction page
   final Widget Function(String)? imageBuilder;
+
+  /// Use this to override the language code that is in the context
+  /// used for showing the introduction in a different language
+  final String? languageCodeOverride;
 
   @override
   State<IntroductionFirebase> createState() => _IntroductionState();
@@ -89,7 +99,8 @@ class _IntroductionState extends State<IntroductionFirebase> {
     Future<bool> shouldShow() async =>
         await _service.shouldShow() ||
         await _firebaseService.shouldAlwaysShowIntroduction();
-
+    var languageCode = widget.languageCodeOverride ??
+        Localizations.localeOf(context).languageCode;
     return FutureBuilder(
       future: shouldShow(),
       builder: (context, snapshot) {
@@ -102,20 +113,40 @@ class _IntroductionState extends State<IntroductionFirebase> {
                   snapshot.data is List<IntroductionPageData>) {
                 return IntroductionScreen(
                   options: widget.options.copyWith(
-                    pages: snapshot.data!
-                        .map(
-                          (e) => IntroductionPage(
-                            title: widget.titleBuilder?.call(e.title) ??
-                                Text(e.title),
-                            graphic: widget.titleBuilder?.call(e.image) ??
-                                CachedNetworkImage(imageUrl: e.image),
-                            text: widget.contentBuilder?.call(e.content) ??
-                                Text(e.content),
-                            decoration: widget.examplePage.decoration,
-                            layoutStyle: widget.examplePage.layoutStyle,
+                    pages: snapshot.data!.map(
+                      (e) {
+                        var title = e.title.isEmpty
+                            ? ''
+                            : e.title[languageCode] ?? e.title.values.first;
+                        var content = e.content.isEmpty
+                            ? ''
+                            : e.content[languageCode] ?? e.content.values.first;
+                        return IntroductionPage(
+                          title:
+                              widget.titleBuilder?.call(title) ?? Text(title),
+                          graphic: e.contentImage != null &&
+                                  e.contentImage!.isNotEmpty
+                              ? widget.imageBuilder?.call(e.contentImage!) ??
+                                  CachedNetworkImage(imageUrl: e.contentImage!)
+                              : null,
+                          text: widget.contentBuilder?.call(content) ??
+                              Text(content),
+                          decoration: widget.decoration?.copyWith(
+                            color: e.backgroundColor,
+                            image: e.backgroundImage != null &&
+                                    e.backgroundImage!.isNotEmpty
+                                ? DecorationImage(
+                                    image: CachedNetworkImageProvider(
+                                      e.backgroundImage!,
+                                    ),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
                           ),
-                        )
-                        .toList(),
+                          layoutStyle: widget.layoutStyle,
+                        );
+                      },
+                    ).toList(),
                   ),
                   onComplete: () async => _service.onComplete(),
                   physics: widget.physics,
