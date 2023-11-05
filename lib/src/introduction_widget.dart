@@ -113,14 +113,18 @@ class _IntroductionState extends State<IntroductionFirebase> {
                   snapshot.data is List<IntroductionPageData>) {
                 return IntroductionScreen(
                   options: widget.options.copyWith(
-                    pages: snapshot.data!.map(
+                    pages: snapshot.data?.map(
                       (e) {
                         var title = e.title.isEmpty
                             ? ''
-                            : e.title[languageCode] ?? e.title.values.first;
+                            : e.title.containsKey(languageCode)
+                                ? e.title[languageCode]!
+                                : e.title.values.first;
                         var content = e.content.isEmpty
                             ? ''
-                            : e.content[languageCode] ?? e.content.values.first;
+                            : e.content.containsKey(languageCode)
+                                ? e.content[languageCode]!
+                                : e.content.values.first;
                         return IntroductionPage(
                           title:
                               widget.titleBuilder?.call(title) ?? Text(title),
@@ -148,9 +152,15 @@ class _IntroductionState extends State<IntroductionFirebase> {
                       },
                     ).toList(),
                   ),
-                  onComplete: () async => _service.onComplete(),
+                  onComplete: () async {
+                    await _service.onComplete();
+                    widget.onComplete();
+                  },
                   physics: widget.physics,
-                  onSkip: () async => _service.onComplete(),
+                  onSkip: () async {
+                    await _service.onSkip();
+                    widget.onComplete();
+                  },
                 );
               } else {
                 return widget.child ?? const CircularProgressIndicator();
@@ -158,10 +168,12 @@ class _IntroductionState extends State<IntroductionFirebase> {
             },
           );
         } else {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await _service.onComplete();
-            widget.onComplete();
-          });
+          if (snapshot.hasData && snapshot.data != null && !snapshot.data!) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              await _service.onComplete();
+              widget.onComplete();
+            });
+          }
           return widget.child ?? const CircularProgressIndicator();
         }
       },
